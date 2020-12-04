@@ -40,3 +40,43 @@ Reminders:
   reminder_sensor: sensor.next_school_reminder
   skip_dates: ["11/12/2020", "11/25/2020-11/27/2020"]
 ```
+
+# UpdateCounters
+
+App to update group count values based on the `state` value.
+
+For battery sensors, define `"battery": True` instead of `state`. The default low battery threshold is 25. For the count sensor, `friendly_name` for the sensor is required but `icon` is optional.
+
+Sample configurations:
+
+```yaml
+UpdateCounters:
+  module: UpdateCounters
+  class: UpdateCounters
+  groups_map:
+    {
+      "lights":
+        {
+          "state": "on",
+          "sensor": "lights_on_count",
+          "friendly_name": "Lights on",
+        },
+    }
+```
+
+```yaml
+UpdateCounters:
+  module: UpdateCounters
+  class: UpdateCounters
+  battery_threshold: 20
+  groups_map:
+    {
+      "device_batteries":
+        {
+          "battery": True,
+          "sensor": "low_battery_count",
+          "friendly_name": "Low battery",
+          "icon": "battery-alert-variant-outline",
+        },
+    }
+```
