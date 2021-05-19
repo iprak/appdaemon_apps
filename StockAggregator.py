@@ -149,27 +149,27 @@ class StockAggregator(hass.Hass):
         else:
             trending = "neutral"
 
-        icon = f"mdi:trending-{trending}"
+        unit_prefix = f" {self.unit_of_measurement}" if self.unit_of_measurement else ""
 
         # Round values before setting them
         attributes = {
-            "cost_basis": self.round(cost_basis),
-            "day_change": self.round(day_change),
-            "day_change_percent": self.round(day_change_percent),
+            "cost_basis": f"{self.round(cost_basis)}{unit_prefix}",
+            "day_change": f"{self.round(day_change)}{unit_prefix}",
+            "day_change_percent": f"{self.round(day_change_percent)} %",
             "friendly_name": self.friendly_name,
-            "gain_percent": self.round(gain_percent),
-            "icon": icon,
-            "market_value": self.round(market_value),
+            "gain_percent": f"{self.round(gain_percent)} %",
+            "icon": f"mdi:trending-{trending}",
+            "market_value": f"{self.round(market_value)}{unit_prefix}",
             "trending": trending,
             "unit_of_measurement": self.unit_of_measurement,
-            "previous_close": self.round(previous_market_value),
+            "previous_close": f"{self.round(previous_market_value)}{unit_prefix}",
         }
 
         self.log(attributes)
 
         self.set_state(
             self.total_entity,
-            state=gain,
+            state=self.round(gain),
             attributes=attributes,
             replace=True,
         )
