@@ -80,3 +80,25 @@ UpdateCounters:
         },
     }
 ```
+
+# StockAggregator
+
+This app calculates total gain/loss for the specified yahoofinance based stock sensors.
+
+```yaml
+Stocks:
+  module: StockAggregator
+  class: StockAggregator
+  total_entity: sensor.total_stocks
+  friendly_name: Gain
+  entities:
+    - entity: yahoofinance.xyz
+      quantity: 540
+      purchases:
+        - quantity: 185.736
+          price: 13.46
+          date: 3-17-2014
+        - quantity: 179.727
+          price: 13.91
+          date: 6-9-2014
+```
