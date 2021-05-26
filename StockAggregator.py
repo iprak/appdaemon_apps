@@ -142,9 +142,9 @@ class StockAggregator(hass.Hass):
         self.log(f"gain={gain}")
 
         # if current_state is not None:
-        if gain < previous_market_value:
+        if market_value < previous_market_value:
             trending = "down"
-        elif gain > previous_market_value:
+        elif market_value > previous_market_value:
             trending = "up"
         else:
             trending = "neutral"
