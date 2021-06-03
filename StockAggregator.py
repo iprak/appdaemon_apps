@@ -24,7 +24,7 @@ from datetime import datetime, timedelta
 #   unit_of_measurement: Unit of measurement (currency) of the generated entity (default=USD)
 #   decimal_places: Number of decimal places (default=2)
 #   entities: List of tracked yahoo finance sensors (required)
-#     - entity: Sensor id e.g. yahoofinance.xyz (required)
+#     - entity: Sensor id e.g. sensor.yahoofinance_xyz (required)
 #       quantity: Number of stocks currently held. Quanity from purchases is used if this is not defined.
 #       purchases: List of purchases
 #         - quantity: Number of stocks purchased (required)
@@ -135,9 +135,9 @@ class StockAggregator(hass.Hass):
             previous_market_value += quantity * previous_price
 
         gain = market_value - cost_basis
-        gain_percent = (gain * 100) / cost_basis
+        gain_percent = ((gain * 100) / cost_basis) if cost_basis != 0 else cost_basis
         day_change = market_value - previous_market_value
-        day_change_percent = (day_change * 100) / previous_market_value
+        day_change_percent = ((day_change * 100) / previous_market_value) if previous_market_value != 0 else previous_market_value
 
         self.log(f"gain={gain}")
 
