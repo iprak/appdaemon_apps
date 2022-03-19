@@ -11,7 +11,7 @@ DEFAULT_BATTERY_THRESHOLD = 25
 class UpdateCounters(hass.Hass):
     def initialize(self):
         self.handle_list = []
-        self._callbacks = {}
+        self.callbacks = {}
 
         self.battery_threshold = self.args.get(
             "battery_threshold", DEFAULT_BATTERY_THRESHOLD
@@ -34,10 +34,10 @@ class UpdateCounters(hass.Hass):
     def terminate(self):
         self.unsubscribe_entities()
 
-        if self._callbacks:
-            for key, value in self._callbacks.items():
+        if self.callbacks:
+            for key, value in self.callbacks.items():
                 self.cancel_timer(value)
-            self._callbacks = None
+            self.callbacks = None
 
     def subscribe_entities(self):
         self.log("Subscribing")
@@ -66,16 +66,16 @@ class UpdateCounters(hass.Hass):
         key = kwargs["key"]
 
         # Entities in a group can change quicky so use a 2 second timer for count
-        if not key in self._callbacks:
+        if not key in self.callbacks:
             # self.log(f"setting callback for {key}")
-            self._callbacks[key] = self.run_in(
+            self.callbacks[key] = self.run_in(
                 self.run_callback, COUNT_UPDATE_BATCH_TIMER, key=key
             )
 
     def run_callback(self, kwargs):
         key = kwargs["key"]
 
-        del self._callbacks[key]
+        del self.callbacks[key]
 
         group_id = "group." + key
         self.update_count(group_id, self.groups_map[key])
@@ -85,7 +85,7 @@ class UpdateCounters(hass.Hass):
             "entity_id"
         ]
 
-        count_sensor = "sensor." + group_map_item["sensor"]
+        count_sensor = "variable." + group_map_item["sensor"]
 
         count = 0
         if entity_list:
@@ -112,7 +112,7 @@ class UpdateCounters(hass.Hass):
             new_attributes["icon"] = "mdi:" + group_map_item["icon"]
 
         self.set_state(count_sensor, state=count, attributes=new_attributes)
-        self.log("Counter %s = %d", count_sensor, count)
+        #self.log("Counter %s = %d", count_sensor, count)
 
     def unsubscribe_entities(self):
         for handle in self.handle_list:
