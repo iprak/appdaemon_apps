@@ -6,8 +6,8 @@ This app applies upload and download changes to another sensor which resets at m
  Args:
     input_upload_sensor: AsusWrt upload sensor (default="sensor.asuswrt_upload")
     input_download_sensor: AsusWrt download sensor (default="sensor.asuswrt_download")
-    output_download_sensor: Target upload sensor (default="variable.daily_download")
-    output_upload_sensor: Target download sensor (default="variable.daily_upload")
+    output_download_sensor: Target upload sensor (default="sensor.daily_download")
+    output_upload_sensor: Target download sensor (default="sensor.daily_upload")
 
 """
 import hassapi as hass
@@ -33,8 +33,8 @@ class AsusWrt(hass.Hass):
         self.verbose_log = self.args.get("verbose_log", False)
         self._upload_sensor = self.args.get("input_upload_sensor", "sensor.asuswrt_upload")
         self._download_sensor = self.args.get("input_download_sensor", "sensor.asuswrt_download")
-        self._target_download_sensor = self.args.get("output_download_sensor", "variable.daily_download")
-        self._target_upload_sensor = self.args.get("output_upload_sensor", "variable.daily_upload")
+        self._target_download_sensor = self.args.get("output_download_sensor", "sensor.daily_download")
+        self._target_upload_sensor = self.args.get("output_upload_sensor", "sensor.daily_upload")
 
         self.listen_state(self.on_download_changed, self._download_sensor)
         self.listen_state(self.on_upload_changed, self._upload_sensor)

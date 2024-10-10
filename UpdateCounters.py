@@ -17,7 +17,7 @@ class UpdateCounters(hass.Hass):
             "battery_threshold", DEFAULT_BATTERY_THRESHOLD
         )
         self.groups_map = self.args["groups_map"]
-        # self.log(self.groups_map)
+        self.log(self.groups_map)
 
         self.subscribe_entities()
         self.listen_event(self.ha_service_invoked, "call_service")
@@ -66,7 +66,7 @@ class UpdateCounters(hass.Hass):
         key = kwargs["key"]
 
         # Entities in a group can change quicky so use a 2 second timer for count
-        if not key in self.callbacks:
+        if key not in self.callbacks:
             # self.log(f"setting callback for {key}")
             self.callbacks[key] = self.run_in(
                 self.run_callback, COUNT_UPDATE_BATCH_TIMER, key=key
@@ -81,17 +81,20 @@ class UpdateCounters(hass.Hass):
         self.update_count(group_id, self.groups_map[key])
 
     def update_count(self, group_id, group_map_item):
+        # self.log(group_id)
         entity_list = self.get_state(group_id, attribute="all")["attributes"][
             "entity_id"
         ]
 
-        count_sensor = "variable." + group_map_item["sensor"]
+        # count_sensor = "variable." + group_map_item["sensor"]
+        count_sensor = "sensor." + group_map_item["sensor"]
 
         count = 0
         if entity_list:
             if group_map_item.get("battery"):
                 for entity_id in entity_list:
                     batteryState = self.get_state(entity_id)
+                    #self.log("batteryState %s=%s", entity_id, batteryState)
 
                     # Safeguard against uninitialized entity
                     if not (batteryState is None) and not (
@@ -102,6 +105,7 @@ class UpdateCounters(hass.Hass):
             else:
                 matchValue = group_map_item.get("state")
 
+                # self.log(entity_list)
                 for entity_id in entity_list:
                     if self.get_state(entity_id) == matchValue:
                         count = count + 1
@@ -115,8 +119,9 @@ class UpdateCounters(hass.Hass):
         #self.log("Counter %s = %d", count_sensor, count)
 
     def unsubscribe_entities(self):
-        for handle in self.handle_list:
-            self.cancel_listen_state(handle)
+        if self.handle_list:
+            for handle in self.handle_list:
+                self.cancel_listen_state(handle)
         self.handle_list = []
 
     def log_notify(self, message, level="INFO"):

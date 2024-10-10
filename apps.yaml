@@ -1,0 +1,473 @@
+# TestVideoCapture:
+#   module: CameraMotionNotifier
+#   class: CameraMotionNotifier
+
+# init_commands: []
+# python_packages:
+#   - bs4
+#   - icalendar
+#   - recurring-ical-events
+#   - imapclient
+#   - simplejson
+#   - Pillow
+# system_packages:
+#   - libjpeg
+#   - tiff-dev
+
+
+SumpPumpMonitor:
+  module: EntityStateMonitor
+  class: EntityStateMonitor
+  entity: binary_sensor.sumppump_on
+  state: 'on'
+  duration_seconds: 90
+  message: "Sump pump has been running for more than 90 seconds."
+  verbose_log: true
+
+
+# AsusWrt:
+#   module: AsusWrt
+#   class: AsusWrt
+
+UpdateCounters:
+  module: UpdateCounters
+  class: UpdateCounters
+  groups_map:
+    {
+      "all_lights":
+        {
+          "state": "on",
+          "sensor": "lights_on_count",
+          "friendly_name": "Lights on",
+          "icon": "lightbulb-on",
+        },
+      "doors":
+        {
+          "state": "on",
+          "sensor": "doors_open_count",
+          "friendly_name": "Doors open",
+          "icon": "door-open",
+        },
+      "cameras":
+        {
+          "state": "off",
+          "sensor": "cameras_disconnected_count",
+          "friendly_name": "Cameras disconnected",
+          "icon": "camera-off",
+        },
+      "hubs":
+        {
+          "state": "off",
+          "sensor": "hubs_disconnected_count",
+          "friendly_name": "Hubs disconnected",
+          "icon": "network-off-outline",
+        },
+      "servers":
+        {
+          "state": "off",
+          "sensor": "servers_disconnected_count",
+          "friendly_name": "Servers disconnected",
+          "icon": "network-off-outline",
+        },
+      "device_batteries":
+        {
+          "battery": True,
+          "sensor": "low_battery_count",
+          "friendly_name": "Low battery",
+          "icon": "battery-alert-variant-outline",
+        },
+    }
+
+#1=Front, 2=Driveway2, 3=Patio, 4=Deck, 8=Driveway1
+MotionFront:
+  module: CameraPhotoNotifier
+  class: CameraPhotoNotifier
+  camera: camera.front
+  #binary_sensor: binary_sensor.nvr8_motion_1
+  binary_sensor: binary_sensor.nvr8_line_crossing_1
+  constrain_input_select: alarm_control_panel.alarm,armed_away,armed_home,armed_night
+  constrain_input_boolean: input_boolean.motion_alert_front
+
+MotionDriveway:
+  module: CameraPhotoNotifier
+  class: CameraPhotoNotifier
+  camera: camera.driveway2
+  binary_sensor: binary_sensor.nvr8_motion_8
+  constrain_input_select: alarm_control_panel.alarm,armed_away,armed_home,armed_night
+  constrain_input_boolean: input_boolean.motion_alert_driveway
+
+MotionPatio:
+  module: CameraPhotoNotifier
+  class: CameraPhotoNotifier
+  camera: camera.patio
+  binary_sensor: binary_sensor.nvr8_motion_4
+  constrain_input_select: alarm_control_panel.alarm,armed_away,armed_home,armed_night
+  constrain_input_boolean: input_boolean.motion_alert_patio
+
+MotionDeck:
+  module: CameraPhotoNotifier
+  class: CameraPhotoNotifier
+  camera: camera.deck
+  binary_sensor: binary_sensor.nvr8_motion_3
+  constrain_input_select: alarm_control_panel.alarm,armed_away,armed_home,armed_night
+  constrain_input_boolean: input_boolean.motion_alert_deck
+
+# GoodMorning:
+#   module: GoodMorning
+#   class: GoodMorning
+#   boolean_entity: binary_sensor.noschool
+#   override_boolean_entity: input_boolean.noschool_override
+#   invert: true
+#   <<: &skip_reminder_days
+#     # Monday is 0
+#     skip_days: [5, 6]
+#     skip_dates: ["10/3/2024","10/4/2024","11/5/2024"]
+
+Reminders:
+  module: Reminders
+  class: Reminders
+  feed: !secret school_calendar_feed
+  google_devices:
+    - media_player.living_room
+  # alexa_devices:
+  #   - media_player.echo_dot
+  reminder_sensor: sensor.next_reminder
+  no_reminder_today_sensor: binary_sensor.noschool
+  reminder_offset: 0
+  # Monday is 0
+  skip_days: [5, 6]
+  skip_dates: ["10/3/2024","10/4/2024","11/5/2024","11/27/2024-11/29/2024","12/2/2024","12/23/2024-1/3/2025"]
+  log: reminders_log
+  test_mode: false
+  verbose_log: true
+  #<<: *skip_reminder_days
+
+
+# UpdateNWS:
+#   module: UpdateNWS
+#   class: UpdateNWS
+#   source: weather.kmsn_daynight
+#   destination: weather.kmsn
+
+CheckEmails:
+  module: MyPoints
+  class: MyPoints
+  log: mypoints_log
+  servers:
+    #- server: imap.gmx.com
+    #  email: !secret gmx_email
+    #  passwd: !secret gmx_passwd
+    #  folder: INBOX
+    
+    - server: imap.mail.yahoo.com
+      email: !secret yahoo_email
+      passwd: !secret yahoo_passwd
+      folder: zOffers
+    - server: imap-mail.outlook.com
+      email: !secret hotmail_email
+      passwd: iqviuypmwxpmrxvi
+      folder: INBOX
+
+Stocks:
+  module: StockAggregator
+  class: StockAggregator
+  total_entity: sensor.total_stocks
+  friendly_name: Fidelity
+  entities:
+    - entity: sensor.yahoofinance_artox
+      quantity: 543.298
+      purchases:
+        - quantity: 185.736
+          price: 13.46
+          date: 3-17-2014
+        - quantity: 179.727
+          price: 13.91
+          date: 6-9-2014
+    - entity: sensor.yahoofinance_PHYSX
+      quantity: 371.709
+      purchases:
+        - quantity: 230.84
+          price: 10.83
+          date: 6-3-2014
+    - entity: sensor.yahoofinance_THOPX
+      quantity: 279.024
+      purchases:
+        - quantity: 208.333
+          price: 12
+          date: 6-5-2014
+    - entity: sensor.yahoofinance_WMCVX
+      quantity: 500.251
+      purchases:
+        - quantity: 423.012
+          price: 5.91
+          date: 6-3-2014
+
+Stocks_Ameriprise:
+  module: StockAggregator
+  class: StockAggregator
+  total_entity: sensor.total_stocks_ameriprise
+  friendly_name: Ameriprise
+  entities:
+    - entity: sensor.yahoofinance_BND #VANGUARD TOTAL BOND MARKET ETF
+      purchases:
+        - quantity: 605
+          price: 72.070
+          date: 2-14-2023
+        - quantity: 181
+          price: 74.51
+          date: 4-6-2023
+        - quantity: 57
+          price: 69.51
+          date: 9-28-2023
+        - quantity: 96
+          price: 72.3
+          date: 6-26-2024
+
+    - entity: sensor.yahoofinance_EVX #VanEck Environmental Services
+      purchases:
+        - quantity: 107
+          price: 139.628
+          date: 3-28-2023
+        - quantity: 32
+          price: 141.94
+          date: 4-6-2023
+        - quantity: 4
+          price: 169.11
+          date: 6-26-2024
+        - quantity: 57
+          price: 174.3600
+          date: 8-2-2024
+      sales:
+        - quantity: 4
+          price: 145.41
+          date: 9-28-2023
+
+    - entity: sensor.yahoofinance_IEFA #ISHARES CORE MSCI EAFE ETF
+      purchases:
+        - quantity: 556
+          price: 65.030
+          date: 2-14-2023
+        - quantity: 170
+          price: 66.88
+          date: 4-6-2023
+        - quantity: 54
+          price: 64.11
+          date: 9-28-2023
+        - quantity: 32
+          price: 72.38
+          date: 9-28-2023
+
+    - entity: sensor.yahoofinance_IEMG #ISHARES CORE MSCI EMERGING MARKETS ETF
+      purchases:
+        - quantity: 241
+          price: 47.350
+          date: 2-14-2023
+        - quantity: 72
+          price: 48.44
+          date: 4-6-2023
+        - quantity: 8
+          price: 47.27
+          date: 9-28-2023
+      sales:
+        - quantity: 44
+          price: 53.38
+          date: 6-26-2024
+
+    - entity: sensor.yahoofinance_IJH #ISHARES CORE S&P MID CAP ETF
+      purchases:
+        - quantity: 136
+          price: 53.27
+          date: 2-14-2023
+        - quantity: 40
+          price: 48.76
+          date: 4-6-2023
+        - quantity: 704
+          price: 57.010
+          date: 2-22-2024
+        - quantity: 34
+          price: 58.08
+          date: 6-26-2024
+
+    - entity: sensor.yahoofinance_IJR #ISHARES CORE S&P SMALL CAP ETF
+      purchases:
+        - quantity: 100
+          price: 102.390
+          date: 2-14-2023
+        - quantity: 31
+          price: 94.12
+          date: 4-6-2023
+        - quantity: 8
+          price: 93.96
+          date: 9-28-2023
+        - quantity: 136
+          price: 109.5665
+          date: 12-27-2023
+        - quantity: 35
+          price: 104.75
+          date: 6-26-2024
+
+    - entity: sensor.yahoofinance_IUSG #ISHARES CORE S&P U S GROWTH ETF
+      purchases:
+        - quantity: 253
+          price: 84.370
+          date: 2-14-2023
+        - quantity: 73
+          price: 88.31
+          date: 4-6-2023
+      sales:
+        - quantity: 27
+          price: 94.26
+          date: 9-28-2023
+        - quantity: 43
+          price: 127.41
+          date: 6-26-2024
+
+    - entity: sensor.yahoofinance_IUSV #ISHARES CORE S&P U S VALUE ETF
+      purchases:
+        - quantity: 197
+          price: 73.440
+          date: 2-14-2023
+        - quantity: 54
+          price: 72.89
+          date: 4-6-2023
+        - quantity: 1
+          price: 88.05
+          date: 6-26-2024
+      sales:
+        - quantity: 17
+          price: 74.28
+          date: 9-28-2023
+
+    - entity: sensor.yahoofinance_IWM #ISHARES RUSSELL 2000 ETF
+      purchases:
+        - quantity: 90
+          price: 188.180
+          date: 2-14-2023
+        - quantity: 25
+          price: 173.72
+          date: 4-6-2023
+        - quantity: 7
+          price: 199.28
+          date: 6-26-2024
+      sales:
+        - quantity: 4
+          price: 176.11
+          date: 9-28-2023
+
+    - entity: sensor.yahoofinance_QUAL #ISHARES MSCI USA QUALITY FACTOR ETF
+      purchases:
+        - quantity: 225
+          price: 118.750
+          date: 2-14-2023
+        - quantity: 64
+          price: 123.17
+          date: 4-6-2023
+      sales:
+        - quantity: 24
+          price: 131.2
+          date: 9-28-2023
+        - quantity: 24
+          price: 171.84
+          date: 6-26-2024
+
+    - entity: sensor.yahoofinance_SCHR #SCHWAB INTERMEDIATE TERM U S TREASURY ETF
+      purchases:
+        - quantity: 436
+          price: 49.040
+          date: 2-14-2023
+        - quantity: 127
+          price: 50.90
+          date: 4-6-2023
+        - quantity: 28
+          price: 47.77
+          date: 9-28-2023
+        - quantity: 75
+          price: 48.82
+          date: 6-26-2024
+        - quantity: 198
+          price: 50.2650
+          date: 8-2-2024
+
+    - entity: sensor.yahoofinance_VCIT #Vanguard Intermediate-Term
+      purchases:
+        - quantity: 317
+          price: 77.960
+          date: 2-14-2023
+        - quantity: 92
+          price: 80.86
+          date: 4-6-2023
+        - quantity: 21
+          price: 75.72
+          date: 9-28-2023
+        - quantity: 184
+          price: 81.3693
+          date: 12-27-2023
+        - quantity: 50
+          price: 80.06
+          date: 6-26-2024
+
+    - entity: sensor.yahoofinance_VTI #VANGUARD TOTAL STOCK MARKET ETF
+      purchases:
+        - quantity: 244
+          price: 199.520
+          date: 2-14-2023
+        - quantity: 74
+          price: 202.24
+          date: 4-6-2023
+      sales:
+        - quantity: 10
+          price: 211.42
+          date: 9-28-2023
+        - quantity: 21
+          price: 267.98
+          date: 6-26-2024
+
+    - entity: sensor.yahoofinance_CFWIX
+      purchases:
+        - quantity: 882.145
+          price: 28.3400
+          date: 12-27-2023
+        - quantity: 40.474
+          price: 28.75
+          date: 6-26-2024
+        - quantity: 333.111
+          price: 30.20
+          date: 8-2-2024
+
+    - entity: sensor.yahoofinance_FELIX
+      purchases:
+        - quantity: 300.978
+          price: 66.45
+          date: 12-27-2023
+        - quantity: 123.031
+          price: 81.2800
+          date: 8-2-2024
+      sales:
+        - quantity: 86.005
+          price: 96.4
+          date: 6-26-2024
+
+    # - entity: sensor.yahoofinance_SRLN #SPDR BLACKSTONE SENIOR LN ETF
+    #   purchases:
+    #     - quantity: 229
+    #       price: 41.790
+    #       date: 2-14-2023
+
+# Garage:
+#   module: UpdateGarage
+#   class: UpdateGarage
+#   log: garage_log
+
+#ResetSnoozedAlarms:
+#  module: ResetSnoozedAlarms
+#  class: ResetSnoozedAlarms
+
+# ErrorNotifier:
+#   module: ErrorNotifier
+#   class: ErrorNotifier
+#   path_to_errorlog: /config/appdaemon_err.log
+
+# ThreadMonitor:
+#   module: ThreadMonitor
+#   class: ThreadMonitor
+

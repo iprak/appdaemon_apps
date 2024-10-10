@@ -1,5 +1,6 @@
 import hassapi as hass
-from datetime import datetime, timedelta
+from datetime import datetime
+import AppUtils
 
 #
 # App to calculate gain based on yahoofinance stock sensors.
@@ -49,8 +50,10 @@ class StockAggregator(hass.Hass):
         self.entities = self.args["entities"]
         self.total_entity = self.args["total_entity"]
         self.friendly_name = self.args.get("friendly_name", "")
-        self.unit_of_measurement = self.args.get("unit_of_measurement", "USD").upper()
+        self.unit_of_measurement = self.args.get("unit_of_measurement", "$").upper()
         self.decimal_places = self.args.get("decimal_places", 2)
+
+        # self._skip_updates = False
 
         self.subscribe_entities()
 
@@ -66,10 +69,20 @@ class StockAggregator(hass.Hass):
 
         for item in self.entities:
             entity = item["entity"].lower()
-            purchases = item["purchases"]
+
+            purchases = item.get("purchases")
+            sales = item.get("sales")
+
+            if (purchases is None) and (sales is None):
+                raise Exception(f"No `purchases` or `sales` defined for {entity}")
+            elif len(purchases) == 0 and len(sales) == 0:
+                raise Exception(f"Empty `purchases` and `sales` defined for {entity}")
+
             quantity = item.get("quantity")
-            self.entities_map[entity] = (quantity, purchases)
-            self.handle_list.append(self.listen_state(self.entity_change, entity))
+            self.entities_map[entity] = (quantity, purchases, sales)
+            self.handle_list.append(
+                self.listen_state(self.entity_change, entity, attribute="all")
+            )
 
         # Force update
         self.update_total()
@@ -83,61 +96,76 @@ class StockAggregator(hass.Hass):
         self.callback = None
         self.update_total()
 
-    def to_float(self, value):
-        try:
-            return float(value)
-        except:
-            return 0
-
-    def round(self, value):
-        """Return formatted value based on decimal_places."""
-        if value is None:
-            return None
-
-        if self.decimal_places < 0:
-            return value
-        if self.decimal_places == 0:
-            return int(value)
-
-        return round(value, self.decimal_places)
-
     def update_total(self):
         market_value = float(0)
         cost_basis = float(0)
         day_change = float(0)
         previous_market_value = float(0)
 
-        for entity, (quantity, purchases) in self.entities_map.items():
+        for entity, (quantity, purchases, sales) in self.entities_map.items():
             current_price = self.get_state(entity)
+            symbol_attributes = self.get_state(entity, attribute="all")["attributes"]
+
             if current_price is None:
                 continue
 
-            current_price = self.to_float(current_price)
-            previous_price = self.to_float(
+            current_price = AppUtils.to_float(current_price)
+            previous_price = AppUtils.to_float(
                 self.get_state(entity, attribute="regularMarketPreviousClose")
             )
 
             quantity_from_purchases = 0
-            for purchase in purchases:
-                purchase_quantity = purchase["quantity"]
-                purchase_price = purchase["price"]
-                date = datetime.strptime(purchase["date"], "%m-%d-%Y")
-                quantity_from_purchases += purchase_quantity
 
-                self.log(f"{entity} {purchase_quantity} @ {purchase_price} on {date}")
-                cost_basis += purchase_quantity * purchase_price
+            if purchases:
+                for purchase in purchases:
+                    purchase_quantity = purchase["quantity"]
+                    purchase_price = purchase["price"]
 
-            # Use the quantity from purchases, if it is not defined at symbol level
+                    purchase_date = purchase.get("date")
+                    if purchase_date:
+                        purchase_date = datetime.strptime(purchase_date, "%m-%d-%Y")
+
+                    quantity_from_purchases += purchase_quantity
+
+                    # self.log(f"{entity} {purchase_quantity} @ {purchase_price} on {purchase_date.strftime('%-m/%-d/%y')}")
+                    cost_basis += purchase_quantity * purchase_price
+
+            if sales:
+                for sale in sales:
+                    sale_quantity = sale["quantity"]
+                    sale_price = sale["price"]
+
+                    sale_date = sale.get("date")
+                    if sale_date:
+                        sale_date = datetime.strptime(sale_date, "%m-%d-%Y")
+
+                    quantity_from_purchases -= sale_quantity
+
+                    # self.log(f"Sold {entity} {sale_quantity} @ {sale_price} on {sale_date.strftime('%-m/%-d/%y')}")
+                    cost_basis -= sale_quantity * sale_price
+
+            # Use the quantity from purchases, if it is not defined at symbol level.
             if quantity is None:
                 quantity = quantity_from_purchases
+
+            if quantity is None:
+                raise Exception("No `purchases > quantity` or `quantity` defined")
 
             market_value += quantity * current_price
             previous_market_value += quantity * previous_price
 
+            # Save off quantity in attributes
+            symbol_attributes["quantity"] = quantity
+            self.set_state(entity, state=current_price, attributes=symbol_attributes)
+
         gain = market_value - cost_basis
         gain_percent = ((gain * 100) / cost_basis) if cost_basis != 0 else cost_basis
         day_change = market_value - previous_market_value
-        day_change_percent = ((day_change * 100) / previous_market_value) if previous_market_value != 0 else previous_market_value
+        day_change_percent = (
+            ((day_change * 100) / previous_market_value)
+            if previous_market_value != 0
+            else previous_market_value
+        )
 
         self.log(f"gain={gain}")
 
@@ -149,30 +177,47 @@ class StockAggregator(hass.Hass):
         else:
             trending = "neutral"
 
-        unit_prefix = f" {self.unit_of_measurement}" if self.unit_of_measurement else ""
+        # unit_prefix = f" {self.unit_of_measurement}" if self.unit_of_measurement else ""
+        market_value = "{:,.2f}".format(
+            AppUtils.round_float(market_value, self.decimal_places)
+        )
 
         # Round values before setting them
         attributes = {
-            "cost_basis": f"{self.round(cost_basis)}{unit_prefix}",
-            "day_change": f"{self.round(day_change)}{unit_prefix}",
-            "day_change_percent": f"{self.round(day_change_percent)} %",
+            "cost_basis": "{:,.2f}".format(cost_basis),
+            "day_change": "{:+,.2f}".format(day_change),
+            "day_change_percent": "{:+,.2f}".format(
+                AppUtils.round_float(day_change_percent, self.decimal_places)
+            )
+            + " %",
             "friendly_name": self.friendly_name,
-            "gain_percent": f"{self.round(gain_percent)} %",
+            "gain_percent": "{:,.2f}".format(
+                AppUtils.round_float(gain_percent, self.decimal_places)
+            )
+            + " %",
             "icon": f"mdi:trending-{trending}",
-            "market_value": f"{self.round(market_value)}{unit_prefix}",
+            "market_value": market_value,
             "trending": trending,
             "unit_of_measurement": self.unit_of_measurement,
-            "previous_close": f"{self.round(previous_market_value)}{unit_prefix}",
+            "previous_close": "{:,.2f}".format(
+                AppUtils.round_float(previous_market_value, self.decimal_places)
+            ),
         }
 
-        self.log(attributes)
+        # self.log(attributes)
 
         self.set_state(
             self.total_entity,
-            state=self.round(gain),
+            state=AppUtils.round_float(gain, self.decimal_places),
             attributes=attributes,
             replace=True,
         )
+
+        # First day of the month
+        if self.datetime(True).day == 1:
+            self.set_state(
+                "sensor.ameriprise_stocks_value_month_start", state=market_value
+            )
 
     def unsubscribe_entities(self):
         for handle in self.handle_list:

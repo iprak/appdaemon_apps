@@ -42,10 +42,15 @@ class Reminders(hass.Hass):
     events = None  # Events for today
     scheduled_event_uids = None
 
+    def tryLog(self, message):
+        '''Conditionally log'''
+        if "verbose_log" in self.args:
+            self.log(message)
+
     def initialize(self):
         self.feed = self.args["feed"]
-        self.alexa_devices = self.args.get("alexa_devices")
-        self.google_devices = self.args.get("google_devices")
+        self.alexa_devices = self.args.get("alexa_devices", [])
+        self.google_devices = self.args.get("google_devices", [])
         self.no_reminder_today_sensor = self.args.get("no_reminder_today_sensor")
         self.reminder_sensor = self.args.get("reminder_sensor")
         self.reminder_sensor_friendly_name = self.args.get("reminder_sensor_friendly_name", "Reminder")
@@ -73,7 +78,7 @@ class Reminders(hass.Hass):
         # self.log(now)
         # self.log(now.astimezone(localTZ))
         # This is the same as before
-        self.log(f"Initialized at {self.datetime(True)} skipping days {self.skip_days}")
+        self.tryLog(f"Initialized at {self.datetime(True)} skipping days {self.skip_days}")
 
         if self.test_mode:
             CURR_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -82,7 +87,7 @@ class Reminders(hass.Hass):
             if os.path.exists(data_file):
                 f = open(data_file, "r")
                 self.test_cached_feed_text = f.read()
-                self.log("Using cached data")
+                self.tryLog("Using cached data")
 
         self.events = {}
         self.scheduled_event_uids = []
@@ -98,13 +103,13 @@ class Reminders(hass.Hass):
         """Check if no school today."""
         if self.no_reminder_today_sensor:
             state = self.get_state(self.no_reminder_today_sensor)
-            self.log(f"is_no_reminder_today {state}")
+            self.tryLog(f"is_no_reminder_today {state}")
             return state == "on"
         return False
 
     def no_school_status_changed(self, entity, attribute, old, new, kwargs):
         # Recalculate whenever no_reminder_today_sensor changes
-        self.log(f"{self.no_reminder_today_sensor} changed to {new} from {old}")
+        self.tryLog(f"{self.no_reminder_today_sensor} changed to {new} from {old}")
 
         # Cancel current callbacks and determine new fetch time
         self.cancel_reminders()
@@ -142,7 +147,7 @@ class Reminders(hass.Hass):
         # Cancel previous reminders since we might not fetch data right away
         # self.cancel_reminders()
         if self.test_mode:
-            self.log(next_fetch_at_str)
+            self.tryLog(next_fetch_at_str)
         else:
             self.set_state(
                 self.reminder_sensor,
@@ -150,7 +155,7 @@ class Reminders(hass.Hass):
                 attributes={"friendly_name": self.reminder_sensor_friendly_name},
             )
 
-        self.log(f"Scheduled recurring fetch starting '{next_fetch_at}'")
+        self.tryLog(f"Scheduled recurring fetch starting '{next_fetch_at}'")
 
         self.data_fetch_timer = self.run_every(self.fetch_data, next_fetch_at, self.fetch_interval * 60)
         if run_once_now:
@@ -213,9 +218,10 @@ class Reminders(hass.Hass):
         localTZ = pytz.timezone(self.get_timezone())
         current_time = self.get_current_instant()
 
-        self.log(f"[{current_time}] fetch_data")
+        self.tryLog(f"[{current_time}] fetch_data")
 
         if current_time.hour >= self.end_hour:  # If after end hour, adjust next fetch
+            self.cancel_reminders()
             self.cancel_recurring_fetch()
             self.set_recurring_fetch()
             return
@@ -223,15 +229,15 @@ class Reminders(hass.Hass):
         try:
             if self.test_mode and self.test_cached_feed_text:
                 feed_text = self.test_cached_feed_text
-                self.log("Using cached feed text")
+                self.tryLog("Using cached feed text")
             else:
                 feed_text = requests.get(self.feed).text
-                # self.log(feed_text)
+                # self.tryLog(feed_text)
 
                 if self.test_mode:
                     self.test_cached_feed_text = feed_text
         except Exception as error:
-            self.log(f"Error getting calendar feed {error}")
+            self.tryLog(f"Error getting calendar feed {error}")
             return
 
         # recurring_ical_events supports recurring events
@@ -250,7 +256,7 @@ class Reminders(hass.Hass):
                         day=event_start_dt.day,
                         tzinfo=localTZ,
                     )
-                    # self.log(f'Fixed {event["SUMMARY"]} to {event_start_dt}')
+                    # self.tryLog(f'Fixed {event["SUMMARY"]} to {event_start_dt}')
                     event["DTSTART"].dt = event_start_dt
 
         # Always fetch from starting time
@@ -258,11 +264,11 @@ class Reminders(hass.Hass):
         end_time = start_time.replace(hour=self.end_hour)
 
         reminder_state_set = False
-        self.log(f"Getting events between {start_time} - {end_time}")
+        self.tryLog(f"Getting events between {start_time} - {end_time}")
         events = recurring_ical_events.of(calendar).between(start_time, end_time)
         events.sort(key=Reminders.get_starttime)
 
-        self.log(f"Found {len(events)} events")
+        self.tryLog(f"Found {len(events)} events")
 
         for event in events:
             summary = event["SUMMARY"]
@@ -271,7 +277,7 @@ class Reminders(hass.Hass):
 
             # event_start can sometime in UTC, convert it to local for comparison
             event_start = event_start.astimezone(localTZ)
-            self.log(f"{summary} @ {event_start} {UID}")
+            self.tryLog(f"{summary} @ {event_start} {UID}")
 
             if UID in self.events:
                 if not self.events[UID]["done"]:
@@ -292,11 +298,11 @@ class Reminders(hass.Hass):
                 }
 
             if self.events[UID]["done"]:
-                self.log(f"{UID} done")
+                self.tryLog(f"{UID} done")
                 continue
 
             if self.events[UID]["scheduled"]:
-                self.log(f"{UID} scheduled")
+                self.tryLog(f"{UID} scheduled")
                 reminder_state_set = True
                 continue
 
@@ -308,7 +314,7 @@ class Reminders(hass.Hass):
                 reminder_sensor_state = f"{message} @{remind_time.strftime('%-I:%M %p')}"
 
                 if current_time < remind_at:
-                    self.log(f"Scheduling '{message}' at {remind_time}")
+                    self.tryLog(f"Scheduling '{message}' at {remind_time}")
 
                     # run_once schedules a task for today
                     timer_id = self.run_once(self.remind, remind_time, message=message, UID=UID)
@@ -327,10 +333,10 @@ class Reminders(hass.Hass):
                     # was reloaded in that 2 minute period, then don't send another reminder right away.
 
                     if self.get_reminder_sensor_UID() != UID:
-                        self.log(f'Sending reminder right away "{reminder_sensor_state} {UID}"')
+                        self.tryLog(f'Sending reminder right away "{reminder_sensor_state} {UID}"')
                         self.remind({"message": message, "UID": UID})
             else:
-                self.log(f"Event '{summary}' has passed")
+                self.tryLog(f"Event '{summary}' has passed")
                 self.events[UID]["done"] = True
                 self.events[UID]["scheduled"] = False
 
@@ -367,32 +373,40 @@ class Reminders(hass.Hass):
         self.events[UID]["scheduled"] = False
         self.events[UID]["timer_id"] = None
 
-        # The first item in scheduled_event_uids should be UID
-        self.scheduled_event_uids.pop(0)
+        reminder_state = "None"
 
         if self.scheduled_event_uids:
-            next_UID = self.scheduled_event_uids[0]
-            reminder_state = self.events[next_UID]["sensor_state"]
-        else:
-            reminder_state = "None"
+            # The first item in scheduled_event_uids should be UID
+            self.scheduled_event_uids.pop(0)
 
-        self.log(f"Announcing '{message}', next '{reminder_state}'")
+            if self.scheduled_event_uids:
+                next_UID = self.scheduled_event_uids[0]
+                reminder_state = self.events[next_UID]["sensor_state"]
+
+        self.tryLog(f"Announcing '{message}', next '{reminder_state}'")
 
         if self.test_mode:
             return
 
         self.call_service("notify/mybot", message=message)
 
-        for device in self.alexa_devices:
-            self.call_service(
-                "notify/alexa_media",
-                target=device,
-                data={"type": "announce"},
-                message=message,
-            )
+        try:
+            for device in self.alexa_devices:
+                self.call_service(
+                    "notify/alexa_media",
+                    target=device,
+                    data={"type": "announce"},
+                    message=message,
+                )
+        except Exception as e:
+            self.tryLog(f"Error invoking alexa_devices. {e}")
 
-        for device in self.google_devices:
-            self.call_service("tts/google_say", entity_id=device, message=message)
+        try:
+            for device in self.google_devices:
+                self.call_service("tts/google_say", entity_id=device, 
+                                  message=message)
+        except Exception as e:
+            self.tryLog(f"Error invoking google_devices. {e}")
 
         self.set_state(
             self.reminder_sensor,
@@ -404,11 +418,11 @@ class Reminders(hass.Hass):
         """Cancel all scheduled reminders"""
 
         if self.events:
-            self.log("Cancelling current reminders")
+            self.tryLog("Cancelling current reminders")
 
             for UID in self.events:
                 if self.events[UID]["timer_id"] is not None:
-                    self.log(f"Cancelling reminder for {UID}")
+                    self.tryLog(f"Cancelling reminder for {UID}")
                     self.cancel_timer(self.events[UID]["timer_id"])
 
         self.events = {}
@@ -423,6 +437,9 @@ class Reminders(hass.Hass):
         :param number reminder_offset: Minutes in which event is about to happen
         """
 
+        if reminder_offset == 0:
+            return message
+        
         pos = message.find(":")
         if pos == -1:
             activity = message.strip()

@@ -36,15 +36,14 @@ class PhotoNotifier(hass.Hass):
         self._processing_event = False
         self._picture_counter = 0
         self._file_paths = []
-        self._combined_path = "/config/media/{0}-Combined.jpg".format(self._camera_name)
+        self._combined_suffix = "/media/{0}-Combined.jpg".format(self._camera_name)
 
     def start_taking_photos(self):
         """Start capturing pictures."""
-        if self._processing_event:
-            self.log("Processing previous event")
-        else:
+        if not self._processing_event:
             # self.log("motion_detected")
             self._processing_event = True
+
             self._picture_counter = 0
             self._file_paths = []
             self.take_picture_or_notify({})
@@ -68,7 +67,8 @@ class PhotoNotifier(hass.Hass):
             self.build_composite_image()
             self.send_notification()
             self._processing_event = False
-        except (FileNotFoundError):
+        except FileNotFoundError as ex:
+            self.log("process_pictures exception (%s)", ex)
             # Retry if not already in a retry
             if not retry:
                 self.log("Retrying process_pictures (%s)", self._camera)
@@ -84,20 +84,21 @@ class PhotoNotifier(hass.Hass):
         self.call_service(
             "notify/mybot",
             message=self._message,
-            data={"photo": [{"caption": self._message, "file": self._combined_path}]},
+            data={"photo": [{"caption": self._message, "file": self.build_service_path(self._combined_suffix) }]},
         )
         self.log("sent notification")
 
     def take_picture(self):
         """Take a picture."""
-        file = "/config/media/{0}-{1}.jpg".format(
-            self._camera_name, self._picture_counter
-        )
-        self._file_paths.append(file)
-        self.call_service("camera/snapshot", entity_id=self._camera, filename=file)
+        file = "/media/{0}-{1}.jpg".format(self._camera_name, self._picture_counter)
+        self._file_paths.append(self.build_remote_path(file))
+        self.call_service("camera/snapshot", entity_id=self._camera, filename=self.build_service_path(file))
+        self.log("Picture saved to %s", self.build_remote_path(file))
 
     def build_composite_image(self):
+        self.log("build_composite_image: opening images")
         images = [Image.open(x) for x in self._file_paths]
+        self.log("build_composite_image: %d images opened", len(images))
         widths, heights = zip(*(i.size for i in images))
 
         total_height = sum(heights) + (NUMBER_OF_PICTURES * BORDER_WIDTH * 2)
@@ -109,7 +110,13 @@ class PhotoNotifier(hass.Hass):
             new_im.paste(im, (BORDER_WIDTH, y_offset))
             y_offset += im.size[1] + (2 * BORDER_WIDTH)
 
-        new_im.save(self._combined_path)
+        new_im.save(self.build_remote_path(self._combined_suffix))
+
+    def build_remote_path(self, suffix: str) -> str:
+        return f"/homeassistant/{suffix}"
+
+    def build_service_path(self, suffix: str) -> str:
+        return f"/config/{suffix}"
 
 
 class CameraPhotoNotifier(PhotoNotifier):
@@ -132,11 +139,8 @@ class CameraPhotoNotifier(PhotoNotifier):
         # self.start_taking_photos()
 
     def motion_detected(self, entity, attribute, old, new, kwargs):
-        #self.log(
-        #    "motion_detected on %s old=%s new=%s", self.args["binary_sensor"], old, new
-        #)
         self.start_taking_photos()
-
+    
 
 class GaragePhotoNotifier(PhotoNotifier):
     """Class for sending image notification when motion is detected after garage door is opened."""
@@ -152,9 +156,7 @@ class GaragePhotoNotifier(PhotoNotifier):
         PhotoNotifier.initialize(self, "Motion in garage", camera)
 
         # door_to_garage_last_changed = self.get_entity(self._door_to_garage).last_changed
-        self.log(
-            "Monitoring motion on %s (garage door %s)", self._motion_sensor, garage_door
-        )
+        self.log("Monitoring motion on %s (garage door %s)", self._motion_sensor, garage_door)
 
         self.listen_state(self.garage_opened, garage_door)
         self.listen_state(self.door_to_garage_changed, self._door_to_garage)
@@ -183,7 +185,7 @@ class GaragePhotoNotifier(PhotoNotifier):
                 )
 
     def motion_detected(self, entity, attribute, old, new, kwargs):
-        self.log("motion_detected")
+        # self.log("motion_detected")
         self.start_taking_photos()
 
     def stop_motion_detection(self):

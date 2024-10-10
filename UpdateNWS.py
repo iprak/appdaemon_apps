@@ -2,7 +2,6 @@ import hassapi as hass
 import datetime
 from dateutil.parser import parse
 import copy
-import voluptuous as vol
 
 #
 # App to update weather entity based on NWS weather daynight entity
@@ -66,7 +65,7 @@ class UpdateNWS(hass.Hass):
                     first_temperature = forecast["temperature"]
 
                 # new_forecasts[date_string]["datetime"] = date_string
-                del new_forecasts[date_string]["daytime"]
+                del new_forecasts[date_string]["is_daytime"]
                 del new_forecasts[date_string]["detailed_description"]
 
         # self.log(f'new_forecasts={new_forecasts}')
@@ -93,18 +92,41 @@ class UpdateNWS(hass.Hass):
 
     def set_templow(self, daily_forecast, forecast):
         previous_value = daily_forecast.get("temperature", None)
-        value = forecast.get("temperature", None)
-        # self.log(f'set_templow {previous_value} {value}')
+        if previous_value is None:
+            return
 
-        if (not previous_value is None) and (not value is None):
-            daily_forecast["templow"] = min(previous_value, value)
+        value = forecast.get("temperature", None)
+        if value is None:
+            return
+
+        # self.log(f'set_templow {previous_value} {value}')
+        daily_forecast["templow"] = min(previous_value, value)
+
+    def extract_precipitation(self, value):
+        if value is None:
+            return None
+
+        if isinstance(value, dict):
+            return value.get("value", None)
+
+        return value
 
     def combine_precipitation(self, daily_forecast, forecast):
-        previous_value = daily_forecast.get("precipitation_probability", None)
-        value = forecast.get("precipitation_probability", None)
-        # self.log(f'combine_precipitation {previous_value} {value}')
+        #Sample values:
+        #precipitation_probability:
+        #    unitCode: wmoUnit:percent
+        #    value: null
+        #precipitation_probability: 50
 
-        if (not previous_value is None) and (not value is None):
-            daily_forecast["precipitation_probability"] = max(
-                previous_value, value
-            )
+        previous_value = self.extract_precipitation(daily_forecast.get("precipitation_probability", None))
+        if previous_value is None:
+            return
+
+        value = self.extract_precipitation(forecast.get("precipitation_probability", None))
+        if value is None:
+            return
+
+        # self.log(f'combine_precipitation {previous_value} {value}')
+        daily_forecast["precipitation_probability"] = max(
+            previous_value, value
+        )
